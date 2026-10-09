@@ -54,8 +54,13 @@ $refs = @(
 $sources = Get-ChildItem -Path (Join-Path $root 'src') -Filter '*.cs' | ForEach-Object { $_.FullName }
 $primary = Join-Path $objDir 'ssh_tunnel_ly.exe'
 
+# /deterministic+ : same source + same paths = byte-identical exe, so a hash that an AV
+#                   vendor has once whitelisted stays whitelisted across rebuilds.
+# /pathmap        : keep local absolute paths out of the assembly metadata.
 $cscArgs = @(
     '/nologo', '/noconfig', '/target:winexe', '/platform:anycpu', '/optimize+', '/debug-', '/warn:4',
+    '/deterministic+',
+    "/pathmap:$root\=/_/",
     "/out:$primary",
     "/win32icon:$icon",
     "/win32manifest:$manifest"
@@ -69,10 +74,13 @@ if ($LASTEXITCODE -ne 0) { throw "compile failed (csc exit code $LASTEXITCODE)" 
 Write-Host ("    intermediate: {0:N0} bytes" -f (Get-Item $primary).Length)
 
 Write-Host '== [2/2] merge into single file ==' -ForegroundColor Cyan
+# NOTE: deliberately NOT using /internalize. Internalizing every merged library type makes the
+# output look like a packed/obfuscated blob, which is what packers and malware droppers do;
+# keeping the types public makes the merge look like an ordinary multi-library application.
 $out = Join-Path $binDir 'ssh_tunnel_ly.exe'
 $mergeArgs = @(
     "/out:$out",
-    '/internalize', '/ndebug', '/noRepackRes', '/skipconfig',
+    '/ndebug', '/noRepackRes', '/skipconfig',
     "/lib:$fw",
     "/lib:$(Split-Path $sshnet -Parent)",
     "/lib:$(Split-Path $bclAsync -Parent)",
