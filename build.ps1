@@ -91,6 +91,12 @@ $mergeArgs = @(
 & $ilrepack @mergeArgs
 if ($LASTEXITCODE -ne 0) { throw "ILRepack failed (exit code $LASTEXITCODE)" }
 
+# The compiler emits the Win32 version resource as language neutral, so Explorer's Details tab
+# shows "Language Neutral"; rewrite that field to Chinese (Simplified, PRC).
+Write-Host '== [3/3] set version resource language ==' -ForegroundColor Cyan
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build\patch_lang.ps1') -Path $out
+if ($LASTEXITCODE -ne 0) { throw "patch_lang failed (exit code $LASTEXITCODE)" }
+
 $final = Get-Item $out
 Write-Host ''
 Write-Host ("BUILD OK: {0}" -f $final.FullName) -ForegroundColor Green
