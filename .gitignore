@@ -3,7 +3,7 @@ bin/
 build/obj/
 build/shot_*.png
 
-# 第三方构建依赖（由 nuget 还原后放在 build\tools，见 README“从源码构建”一节）
+# 第三方构建依赖：用 nuget 还原后放在 build\tools（Roslyn / ILRepack / SSH.NET，约 99 MB）
 build/tools/
 
 # 本地凭据与个人文件
