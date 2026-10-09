@@ -1,0 +1,11 @@
+# 构建产物
+bin/
+build/obj/
+build/shot_*.png
+
+# 第三方构建依赖（由 nuget 还原后放在 build\tools，见 README“从源码构建”一节）
+build/tools/
+
+# 本地凭据与个人文件
+gitaccess.txt
+*.user
