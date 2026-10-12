@@ -102,33 +102,16 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = '.\bin\ssh_tunnel_ly.exe'
-          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
-          $md5 = (Get-FileHash $exe -Algorithm MD5).Hash
-          $size = (Get-Item $exe).Length
 
           $tag = '${{ github.event.inputs.tag }}'
           if ([string]::IsNullOrWhiteSpace($tag)) { $tag = $env:GITHUB_REF_NAME }
           if ([string]::IsNullOrWhiteSpace($tag)) { throw 'no tag given' }
 
+          # Release body = .github/release-notes.md, verbatim: user-facing notes only
+          # (run requirements + usage). Sizes/hashes/PE sections stay in the run log,
+          # printed by the "verify artifact" step.
           $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           Copy-Item '.\.github\release-notes.md' $notes -Force
-          $extra = @(
-            '',
-            '---',
-            '',
-            '### ' + $tag + ' build artifact',
-            '',
-            '| | |',
-            '| --- | --- |',
-            ('| file | `ssh_tunnel_ly.exe` |'),
-            ('| size | ' + ('{0:N0}' -f $size) + ' bytes |'),
-            ('| SHA256 | `' + $sha + '` |'),
-            ('| MD5 | `' + $md5 + '` |'),
-            ('| built by | GitHub Actions run ' + $env:GITHUB_RUN_ID + ' on `' + $env:RUNNER_OS + '` |'),
-            '',
-            'Built from commit `' + $env:GITHUB_SHA + '`.'
-          )
-          Add-Content -Path $notes -Value $extra -Encoding UTF8
 
           gh release create $tag $exe --title ('ssh_tunnel_ly ' + $tag) --notes-file $notes --target $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { throw ('gh release create failed: ' + $LASTEXITCODE) }
