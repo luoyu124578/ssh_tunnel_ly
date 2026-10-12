@@ -1,0 +1,135 @@
+name: build-release
+
+# Builds the single-file exe from source on a GitHub-hosted Windows runner and
+# publishes it as a GitHub Release asset.
+#
+# Trigger it manually (Actions -> build-release -> Run workflow) or by pushing a
+# v* tag. The build dependencies (Roslyn csc, ILRepack, SSH.NET) are NOT in the
+# repository - they are downloaded from nuget.org into build\tools first, which
+# is exactly the layout build.ps1 expects.
+#
+# NOTE: keep every run: script ASCII-only. GitHub Actions writes the step script
+# as a file that Windows PowerShell may read as ANSI, which corrupts non-ASCII.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'release tag to create or update (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: show toolchain (informational)
+        shell: powershell
+        run: |
+          $PSVersionTable.PSVersion.ToString()
+          (Get-Item 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\mscorlib.dll').VersionInfo.FileVersion
+
+      - name: fetch build dependencies from nuget.org into build\tools
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $tools = Join-Path $env:GITHUB_WORKSPACE 'build\tools'
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $pkgs = @(
+            @{ id = 'microsoft.net.compilers.toolset';          ver = '4.11.0'; dir = 'roslyn' },
+            @{ id = 'ilrepack';                                 ver = '2.0.30'; dir = 'ilrepack' },
+            @{ id = 'ssh.net';                                  ver = '2024.1.0'; dir = 'sshnet2024' },
+            @{ id = 'microsoft.bcl.asyncinterfaces';            ver = '1.0.0'; dir = 'bclasync' },
+            @{ id = 'system.threading.tasks.extensions';        ver = '4.5.2'; dir = 'extensions' },
+            @{ id = 'system.runtime.compilerservices.unsafe';   ver = '4.5.2'; dir = 'unsafe' }
+          )
+          foreach ($p in $pkgs) {
+            $url = 'https://api.nuget.org/v3-flatcontainer/{0}/{1}/{0}.{1}.nupkg' -f $p.id, $p.ver
+            $nupkg = Join-Path $env:TEMP ('{0}.{1}.nupkg' -f $p.id, $p.ver)
+            Write-Host ('downloading ' + $url)
+            Invoke-WebRequest -Uri $url -OutFile $nupkg -UseBasicParsing
+            $dest = Join-Path $tools $p.dir
+            if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($nupkg, $dest)
+          }
+          Get-ChildItem $tools | Select-Object -ExpandProperty Name
+
+      - name: build single-file exe
+        shell: powershell
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+          if ($LASTEXITCODE -ne 0) { throw ('build.ps1 failed with exit code ' + $LASTEXITCODE) }
+
+      - name: verify artifact
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = '.\bin\ssh_tunnel_ly.exe'
+          if (-not (Test-Path $exe)) { throw 'bin\ssh_tunnel_ly.exe was not produced' }
+          $item = Get-Item $exe
+          Write-Host ('size   : {0:N0} bytes' -f $item.Length)
+          Write-Host ('MD5    : ' + (Get-FileHash $exe -Algorithm MD5).Hash)
+          Write-Host ('SHA256 : ' + (Get-FileHash $exe -Algorithm SHA256).Hash)
+          Write-Host ('sections:')
+          $b = [System.IO.File]::ReadAllBytes((Resolve-Path $exe).Path)
+          $pe = [BitConverter]::ToInt32($b, 0x3C)
+          $n = [BitConverter]::ToUInt16($b, $pe + 6)
+          $opt = [BitConverter]::ToUInt16($b, $pe + 20)
+          $off = $pe + 24 + $opt
+          for ($i = 0; $i -lt $n; $i++) {
+            $o = $off + $i * 40
+            Write-Host ('  ' + ([System.Text.Encoding]::ASCII.GetString($b, $o, 8)).Trim([char]0))
+          }
+          $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe).Path)
+          Write-Host ('company/product/version: ' + $vi.CompanyName + ' / ' + $vi.ProductName + ' / ' + $vi.FileVersion)
+          Write-Host ('language: ' + $vi.Language)
+          if (Get-Process ssh_tunnel_ly -ErrorAction SilentlyContinue) { throw 'unexpected running instance' }
+
+      - name: publish release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = '.\bin\ssh_tunnel_ly.exe'
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
+          $md5 = (Get-FileHash $exe -Algorithm MD5).Hash
+          $size = (Get-Item $exe).Length
+
+          $tag = '${{ github.event.inputs.tag }}'
+          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = $env:GITHUB_REF_NAME }
+          if ([string]::IsNullOrWhiteSpace($tag)) { throw 'no tag given' }
+
+          $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          Copy-Item '.\.github\release-notes.md' $notes -Force
+          $extra = @(
+            '',
+            '---',
+            '',
+            '### ' + $tag + ' build artifact',
+            '',
+            '| | |',
+            '| --- | --- |',
+            ('| file | `ssh_tunnel_ly.exe` |'),
+            ('| size | ' + ('{0:N0}' -f $size) + ' bytes |'),
+            ('| SHA256 | `' + $sha + '` |'),
+            ('| MD5 | `' + $md5 + '` |'),
+            ('| built by | GitHub Actions run ' + $env:GITHUB_RUN_ID + ' on `' + $env:RUNNER_OS + '` |'),
+            '',
+            'Built from commit `' + $env:GITHUB_SHA + '`.'
+          )
+          Add-Content -Path $notes -Value $extra -Encoding UTF8
+
+          gh release create $tag $exe --title ('ssh_tunnel_ly ' + $tag) --notes-file $notes --target $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw ('gh release create failed: ' + $LASTEXITCODE) }
+          gh release view $tag
