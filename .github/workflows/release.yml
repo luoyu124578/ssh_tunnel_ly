@@ -114,5 +114,12 @@ jobs:
           Copy-Item '.\.github\release-notes.md' $notes -Force
 
           gh release create $tag $exe --title ('ssh_tunnel_ly ' + $tag) --notes-file $notes --target $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { throw ('gh release create failed: ' + $LASTEXITCODE) }
+          if ($LASTEXITCODE -ne 0) {
+            # the release (or just the tag) already exists: refresh asset + notes instead
+            Write-Host ('gh release create failed (' + $LASTEXITCODE + '), updating the existing release')
+            gh release upload $tag $exe --clobber
+            if ($LASTEXITCODE -ne 0) { throw ('gh release upload failed: ' + $LASTEXITCODE) }
+            gh release edit $tag --title ('ssh_tunnel_ly ' + $tag) --notes-file $notes
+            if ($LASTEXITCODE -ne 0) { throw ('gh release edit failed: ' + $LASTEXITCODE) }
+          }
           gh release view $tag
