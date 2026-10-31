@@ -1,8 +1,6 @@
 using System;
-using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
-using System.IO;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -236,8 +234,7 @@ namespace SshTunnelLy
         {
             try
             {
-                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
-                Process.Start("explorer.exe", "\"" + path + "\"");
+                Shell.OpenFolder(path);
             }
             catch (Exception ex)
             {

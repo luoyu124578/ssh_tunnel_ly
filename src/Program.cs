@@ -1,6 +1,6 @@
 using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -23,12 +23,19 @@ namespace SshTunnelLy
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
 
-        [DllImport("user32.dll")]
-        private static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder text, int maxCount);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentProcessId();
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         private const int SW_RESTORE = 9;
+
+        // The main window caption, used to recognise a running instance without asking the OS
+        // about other processes (see ActivateRunningInstance).
+        private const string WindowTitlePrefix = "ssh_tunnel_ly";
 
         /// <summary>已有实例时：通知它把主窗口显示出来（托盘隐藏状态下也能唤醒）。</summary>
         private static EventWaitHandle _showEvent;
@@ -120,25 +127,25 @@ namespace SshTunnelLy
             }
             catch { }
 
-            // 退路：直接找它的窗口并激活。
+            // 退路：按窗口标题找到已有实例的窗口并激活。
+            // 这里刻意不用 System.Diagnostics.Process：只为了"看看有没有同名进程"就把
+            // 进程枚举能力写进程序集元数据并不划算，直接读顶层窗口标题就够。
             try
             {
                 IntPtr found = IntPtr.Zero;
-                uint self = (uint)Process.GetCurrentProcess().Id;
+                uint self = GetCurrentProcessId();
                 EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
                 {
                     uint pid;
                     GetWindowThreadProcessId(hWnd, out pid);
                     if (pid == self) return true;
-                    Process p;
-                    try { p = Process.GetProcessById((int)pid); }
-                    catch { return true; }
-                    if (string.Equals(p.ProcessName, "ssh_tunnel_ly", StringComparison.OrdinalIgnoreCase))
-                    {
-                        found = hWnd;
-                        return false;
-                    }
-                    return true;
+
+                    StringBuilder title = new StringBuilder(256);
+                    if (GetWindowTextW(hWnd, title, title.Capacity) <= 0) return true;
+                    if (!title.ToString().StartsWith(WindowTitlePrefix, StringComparison.OrdinalIgnoreCase)) return true;
+
+                    found = hWnd;
+                    return false;
                 }, IntPtr.Zero);
 
                 if (found != IntPtr.Zero)

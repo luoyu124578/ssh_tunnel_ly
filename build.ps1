@@ -91,11 +91,15 @@ $mergeArgs = @(
 & $ilrepack @mergeArgs
 if ($LASTEXITCODE -ne 0) { throw "ILRepack failed (exit code $LASTEXITCODE)" }
 
-# The compiler emits the Win32 version resource as language neutral, so Explorer's Details tab
-# shows "Language Neutral"; rewrite that field to Chinese (Simplified, PRC).
-Write-Host '== [3/3] set version resource language ==' -ForegroundColor Cyan
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build\patch_lang.ps1') -Path $out
-if ($LASTEXITCODE -ne 0) { throw "patch_lang failed (exit code $LASTEXITCODE)" }
+# Post-processing of the merged binary (src\patch_exe.ps1):
+#   a) Win32 version resource language neutral -> Chinese (Simplified, PRC);
+#   b) PE TimeDateStamp -> the HEAD commit time (csc /deterministic+ writes a hash-derived
+#      stamp that sandboxes read as "timestamp in the future", i.e. timestomping);
+#   c) the UTF-16 string "Compression algorithm not found" (carried by SSH.NET) is byte-identical
+#      to the MPRESS packer stub message, so sandboxes report the exe as MPRESS-packed.
+Write-Host '== [3/3] post-process (language, PE timestamp, packer-signature string) ==' -ForegroundColor Cyan
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'build\patch_exe.ps1') -Path $out
+if ($LASTEXITCODE -ne 0) { throw "patch_exe failed (exit code $LASTEXITCODE)" }
 
 $final = Get-Item $out
 Write-Host ''
