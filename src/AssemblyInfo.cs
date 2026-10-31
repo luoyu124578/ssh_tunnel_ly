@@ -13,13 +13,13 @@ using System.Runtime.InteropServices;
 // 版本号改动时请同时更新 README 的更新记录。
 
 [assembly: AssemblyTitle("ssh_tunnel_ly")]
-[assembly: AssemblyDescription("SSH 本地/远程端口转发工具（ssh -L / -R），单文件免安装")]
+[assembly: AssemblyDescription("SSH local/remote port forwarding (ssh -L / -R), portable single-file exe")]
 [assembly: AssemblyProduct("ssh_tunnel_ly")]
 [assembly: AssemblyCompany("luoyu124578")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 luoyu124578")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
 [assembly: AssemblyInformationalVersion("1.0.0")]
-[assembly: NeutralResourcesLanguage("zh-CN")]
+[assembly: NeutralResourcesLanguage("en-US")]
 [assembly: ComVisible(false)]
 [assembly: Guid("7b5c3b4e-9f4d-4e3a-9c2b-1a6e5d4c3b2a")]

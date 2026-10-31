@@ -92,7 +92,9 @@ $mergeArgs = @(
 if ($LASTEXITCODE -ne 0) { throw "ILRepack failed (exit code $LASTEXITCODE)" }
 
 # Post-processing of the merged binary (src\patch_exe.ps1):
-#   a) Win32 version resource language neutral -> Chinese (Simplified, PRC);
+#   a) Win32 version resource language neutral -> English (United States) 0x0409. The compiler
+#      writes "language neutral", and a non-English id (0x0804) is flagged by sandboxes as
+#      "translates to an unusual binary language"; a mainstream language is unremarkable;
 #   b) PE TimeDateStamp -> the HEAD commit time (csc /deterministic+ writes a hash-derived
 #      stamp that sandboxes read as "timestamp in the future", i.e. timestomping);
 #   c) the UTF-16 string "Compression algorithm not found" (carried by SSH.NET) is byte-identical

@@ -3,7 +3,10 @@
 # Three byte-level fixups, each of which removes a static-analysis red flag that the compiler
 # or ILRepack leaves behind:
 #
-#   1) VERSIONINFO language -> Chinese (Simplified, PRC), done by patch_lang.ps1 (child script).
+#   1) VERSIONINFO language -> English (United States) 0x0409, done by patch_lang.ps1 (child
+#      script). A non-English language id (0x0804 Chinese) is reported by Hybrid Analysis as
+#      "translates to an unusual binary language" and counts towards the suspicion score; a
+#      mainstream language keeps the resource complete without that flag.
 #   2) PE header TimeDateStamp -> the commit time of HEAD.
 #      csc /deterministic+ does NOT write the build time; it writes a hash-derived value, which
 #      lands on a random date - sandbox reports then say "Timestamp in PE header is very old or
